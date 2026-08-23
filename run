@@ -1,0 +1,4 @@
+#! /bin/sh
+# A simple run script which runs the entire pipeline (except reporting results) for simple invocation
+
+./generate.py && ./build.py "$@" && ./sbom.py "$@"

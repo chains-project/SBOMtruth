@@ -1,0 +1,1 @@
+fake-python-requirement == 6.7.8

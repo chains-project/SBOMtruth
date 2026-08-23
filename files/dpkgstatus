@@ -1,0 +1,9 @@
+Package: fake-dpkg-package
+Status: install ok installed
+Priority: optional
+Section: utils
+Installed-Size: 256
+Maintainer: John Doe <Johnny@Doe.net>
+Architecture: amd64
+Multi-Arch: foreign
+Version: 1.2.3

@@ -1,0 +1,314 @@
+{
+    "bases": {
+        "scratch": [
+            {"image": "scratch"}
+        ],
+        "node": [
+            {"image": "node:slim", "postfix": "debian", "confounders": ["extractdeb", "stripdeb"]},
+            {"image": "node:alpine", "postfix": "alpine", "confounders": ["extractalpine", "stripalpine"]}
+        ],
+        "python": [
+            {"image": "python:3.14-slim", "postfix": "debian", "confounders": ["extractdeb", "stripdeb"]},
+            {"image": "python:3.14-alpine", "postfix": "alpine", "confounders": ["extractalpine", "stripalpine"]}
+        ],
+        "go": [
+            {"image": "golang:1.26.6", "postfix": "debian", "confounders": ["extractdeb", "stripdeb"]},
+            {"image": "golang:1.26.6-alpine", "postfix": "alpine", "confounders": ["extractalpine", "stripalpine"]}
+        ],
+        "maven": [
+            {"image": "maven:3-eclipse-temurin-26-noble", "postfix": "debian", "confounders": ["extractdeb", "stripdeb"]},
+            {"image": "maven:3-eclipse-temurin-26-alpine", "postfix": "alpine", "confounders": ["extractalpine", "stripalpine"]}
+        ],
+        "rust": [
+            {"image": "rust:1.97.1-slim", "postfix": "debian", "confounders": ["extractdeb", "stripdeb"]},
+            {"image": "rust:1.97.1-alpine", "postfix": "alpine", "confounders": ["extractalpine", "stripalpine"]}
+        ]
+    },
+    "confounders": {
+        "stripdeb": {
+            "name": "strip",
+            "friendly": "Remove /var/lib/dpkg/status",
+            "run": [
+                "rm -f /var/lib/dpkg/status"
+            ]
+        },
+        "stripalpine": {
+            "name": "strip",
+            "friendly": "Remove /lib/apk/db/installed",
+            "run": [
+                "rm -f /lib/apk/db/installed"
+            ]
+        },
+        "stripnpm": {
+            "name": "strip",
+            "friendly": "Remove all package.json and package-lock.json files",
+            "run": [
+                "find / -type f | grep 'package\\.json' | xargs rm -f",
+                "find / -type f | grep 'package-lock\\.json' | xargs rm -f"
+            ],
+            "chained": ["isolatenpm"]
+        },
+        "fakenpm" : {
+            "name": "fake",
+            "friendly": "Add a fake package.json",
+            "copy": [
+                {"path": "package.json", "target": "/fake/package.json"}
+            ]
+        },
+        "strippython": {
+            "name": "strip",
+            "friendly": "strip dist-info from python",
+            "run": [
+                "find / -type d | grep 'dist-info' | xargs rm -rf"
+            ]
+        },
+        "striprust": {
+            "name": "strip",
+            "friendly": "remove all Cargo.lock and Cargo.toml files",
+            "run": [
+                "find / -name Cargo.toml -or -name Cargo.lock | xargs rm -f"
+            ]
+        },
+        "fakepython": {
+            "name": "fake",
+            "friendly": "Add a fake requirements.txt",
+            "copy": [
+                {"path": "requirements.txt", "target": "/fake/requirements.txt"}
+            ]
+        },
+        "godep": {
+            "name": "prep",
+            "friendly": "get go metadata",
+            "maketarget": false,
+            "run": [
+                "cd /goapp && go mod graph > /gt/go.txt"
+            ]
+        },
+        "gobuild": {
+            "name": "compiled",
+            "friendly": "compile go",
+            "run": [
+                "cd /goapp && go build ."
+            ],
+            "chained": ["isolatego"]
+        },
+        "isolatego": {
+            "name": "isolate",
+            "friendly": "isolate compiled go app",
+            "scratch": true,
+            "copy": [
+                {"path": "/goapp/sbom", "target": "/sbom", "prev": true}
+            ],
+            "keepdeps": ["go"]
+        },
+        "emptyextract": {
+            "name": "extract",
+            "friendly": "No-op extract image target",
+            "scratch": true,
+            "maketarget": false
+        },
+        "extract": {
+            "name": "extract",
+            "friendly": "Primary ground truth extraction",
+            "scratch": true,
+            "maketarget": false,
+            "copy": [
+                {"path": "/gt", "target": ".", "prev": true}
+            ]
+        },
+        "extractprep": {
+            "name": "extract",
+            "friendly": "Primary ground truth extraction",
+            "scratch": true,
+            "maketarget": false,
+            "copy": [
+                {"path": "/gt", "target": ".", "prep": true}
+            ]
+        },
+        "extractdeb": {
+            "name": "extract",
+            "friendly": "Extract /var/lib/dpkg/status",
+            "scratch": true,
+            "maketarget": false,
+            "copy": [
+                {"path": "/var/lib/dpkg/status", "target": "dpkgstatus.txt", "prev": true}
+            ]
+        },
+        "extractalpine": {
+            "name": "extract",
+            "friendly": "Extract /lib/apk/db/installed",
+            "scratch": true,
+            "maketarget": false,
+            "copy": [
+                {"path": "/lib/apk/db/installed", "target": "alpineinstalled.txt", "prev": true}
+            ]
+        },
+        "isolatenpm": {
+            "name": "isolate",
+            "friendly": "Isolate just /npmapp",
+            "scratch": true,
+            "copy": [
+                {"path": "/npmapp", "target": "/npmapp", "prev": true}
+            ],
+            "keepdeps": ["npm"]
+        },
+        "isolatedeb": {
+            "name": "isolate",
+            "friendly": "Isolate /var/lib/dpkg/status",
+            "scratch": true,
+            "copy": [
+                {"path": "/var/lib/dpkg/status", "target": "/var/lib/dpkg/status", "prev": true}
+            ],
+            "keepdeps": ["apt"]
+        },
+        "rustbuild": {
+            "name": "compiled",
+            "friendly": "Build and compile rust",
+            "run": [
+                "cd /rustapp && cargo build"
+            ],
+            "chained": ["isolaterust"]
+        },
+        "isolaterust": {
+            "name": "isolate",
+            "friendly": "Isolate rust app",
+            "scratch": true,
+            "copy": [
+                {"path": "/rustapp/target/debug/rustapp", "target": "/rustapp", "prev": true}
+            ],
+            "keepdeps": ["rust"]
+        },
+        "rustdep": {
+            "name": "prep",
+            "friendly": "run cargo metadata for rustapp",
+            "maketarget": false,
+            "run": [
+                "cargo metadata --format-version 1 --manifest-path /rustapp/Cargo.toml > /gt/rust.json"
+            ]
+        },
+        "rustbuildaudit": {
+            "name": "compiled",
+            "friendly": "Build and compile rust with auditable",
+            "run": [
+                "cd /rustapp && cargo auditable build"
+            ],
+            "chained": ["isolaterust"]
+        },
+        "mavendep": {
+            "name": "prep",
+            "friendly": "run maven dependency tree",
+            "maketarget": false,
+            "run": [
+                "cd /mvnapp && mvn dependency:tree -DoutputType=json -DoutputFile=/gt/mvn.json"
+            ]
+        },
+        "jardep": {
+            "name": "prep",
+            "friendly": "find maven metadata in jar files",
+            "maketarget": false,
+            "run": [
+                "find / -name \"*.jar\" -type f -exec sh -c 'jar -f {} --dir \"/tmp/ex/$(basename {})\" -x META-INF/maven' \";\"",
+                "find /tmp/ex -name pom.properties -exec awk 'FNR==1 {print \"-----\" FILENAME} {print}' {} + > /gt/mvnjar.txt"
+            ]
+        },
+        "mavenpackage": {
+            "name": "compiled",
+            "friendly": "package maven",
+            "run": [
+                "cd /mvnapp && mvn package"
+            ],
+            "chained": ["isolatemaven"]
+        },
+        "isolatemaven": {
+            "name": "isolate",
+            "friendly": "isolate maven app",
+            "scratch": true,
+            "copy": [
+                {"path": "/mvnapp/target/app-1.0-SNAPSHOT.jar", "target": "/mavenapp.jar", "prev": true}
+            ],
+            "keepdeps": ["maven"]
+        }
+    },
+    "recipes": [
+        {
+            "name": "node",
+            "base": "node",
+            "deps": {
+                "npm": [
+                    "five",
+                    "is-ten-thousand"
+                ]
+            },
+            "confounders": ["extract", "stripnpm", "fakenpm", "isolatenpm"]
+        },
+        {
+            "name": "python",
+            "base": "python",
+            "deps": {
+                "python": [
+                    "requests",
+                    "numpy"
+                ]
+            },
+            "confounders": ["extract", "fakepython", "strippython"]
+        },
+        {
+            "name": "empty",
+            "base": "scratch",
+            "confounders": ["emptyextract"],
+            "files": [
+                {"path": "package.json", "target": "/app/package.json"},
+                {"path": "package-lock.json", "target": "/app/package-lock.json"},
+                {"path": "dpkgstatus", "target": "/var/lib/dpkg/status"},
+                {"path": "Cargo.toml", "target": "/app/Cargo.toml"},
+                {"path": "Cargo.lock", "target": "/app/Cargo.lock"}
+            ]
+        },
+        {
+            "name": "go",
+            "base": "go",
+            "deps": {
+                "go": [
+                    "github.com/cristalhq/jwt/v5"
+                ]
+            },
+            "confounders": ["godep", "extract", "extractprep", "gobuild"]
+        },
+        {
+            "name": "maven",
+            "base": "maven",
+            "deps": {
+                "maven": [
+                    {"group": "com.google.http-client", "artifact": "google-http-client", "version": "2.2.0"},
+                    {"group": "org.apache.logging.log4j", "artifact": "log4j-api", "version": "2.26.1"}
+                ]
+            },
+            "confounders": ["jardep", "mavendep", "extract", "extractprep", "mavenpackage"]
+        },
+        {
+            "name": "rust",
+            "base": "rust",
+            "deps": {
+                "rust": [
+                    {"package": "time", "version": "0.1.12"},
+                    {"package": "regex", "version": "0.1.41"}
+                ]
+            },
+            "confounders": ["rustdep", "extract", "extractprep", "rustbuild", "striprust"]
+        },
+        {
+            "name": "rust-auditable",
+            "base": "rust",
+            "deps": {
+                "rust": [
+                    {"package": "time", "version": "0.1.12"},
+                    {"package": "regex", "version": "0.1.41"}
+                ]
+            },
+            "run": [
+                "cargo install cargo-auditable cargo-audit"
+            ],
+            "confounders": ["rustdep", "extract", "extractprep", "rustbuildaudit", "striprust"]
+        }
+    ]
+}

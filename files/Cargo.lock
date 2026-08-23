@@ -1,0 +1,10 @@
+[[package]]
+name = "fake-cargo-lock-package"
+version = "1.2.3"
+dependencies = [
+    "fake-cargo-lock-dependency"
+]
+
+[[package]]
+name = "fake-cargo-lock-dependency"
+version = "1.2.3"
