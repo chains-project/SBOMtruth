@@ -1,5 +1,5 @@
 def install(ls: list[str], _rname: str) -> list[str]:
-    return [f"RUN apt install {" ".join(ls)}"]
+    return [f"RUN apt install {" ".join(ls)} -y"]
 
 def collect(f, src: str) -> list[dict]:
     lst = []

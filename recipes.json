@@ -22,6 +22,12 @@
         "rust": [
             {"image": "rust:1.97.1-slim", "postfix": "debian", "confounders": ["extractdeb", "stripdeb"]},
             {"image": "rust:1.97.1-alpine", "postfix": "alpine", "confounders": ["extractalpine", "stripalpine"]}
+        ],
+        "debian": [
+            {"image": "debian:13.7-slim", "postfix": "solo"}
+        ],
+        "alpine": [
+            {"image": "alpine:3.24.2", "postfix": "solo"}
         ]
     },
     "confounders": {
@@ -311,6 +317,31 @@
                 ]
             },
             "confounders": ["rustdep", "extract", "extractprep", "rustbuildaudit", "striprust"]
+        },
+        {
+            "name": "debian",
+            "base": "debian",
+            "deps": {
+                "apt": [
+                    "imagemagick"
+                ]
+            },
+            "run": {
+                "before": [
+                    "apt update"
+                ]
+            },
+            "confounders": ["extractdeb", "stripdeb", "extract"]
+        },
+        {
+            "name": "alpine",
+            "base": "alpine",
+            "deps": {
+                "apk": [
+                    "imagemagick"
+                ]
+            },
+            "confounders": ["extractalpine", "stripalpine", "extract"]
         }
     ]
 }

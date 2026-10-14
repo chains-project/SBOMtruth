@@ -1,4 +1,4 @@
-def install(ls: list[str]) -> list[str]:
+def install(ls: list[str], _rname: str) -> list[str]:
     return [f"RUN apk add {" ".join(ls)}"]
 
 def collect(f, src: str) -> list[dict]:
