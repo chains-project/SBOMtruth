@@ -120,8 +120,13 @@ def main() -> None:
         for src in deps:
             df.extend(gens[src].install(deps[src], recipe["name"]))
 
-        run = [f"RUN {r}" for r in recipe["run"]] if "run" in recipe else []
-        df.extend(run)
+        if "run" in recipe:
+            if "before" in recipe["run"]:
+                run = [f"RUN {r}" for r in recipe["run"]["before"]]
+                df[1:1] = run # scuffed extend but at the start
+            if "after" in recipe["run"]:
+                run = [f"RUN {r}" for r in recipe["run"]["after"]]
+                df.extend(run)
 
         df.extend(postamble(recipe))
 

@@ -305,9 +305,11 @@
                     {"package": "regex", "version": "0.1.41"}
                 ]
             },
-            "run": [
+            "run": {
+                "after": [
                 "cargo install cargo-auditable cargo-audit"
-            ],
+                ]
+            },
             "confounders": ["rustdep", "extract", "extractprep", "rustbuildaudit", "striprust"]
         }
     ]
