@@ -33,7 +33,10 @@ def bom(path: str, name: str, target: str) -> None:
     subprocess.run(["docker", "save", f"sbom/{name}:{target}", "-o", "image.tar"], cwd="work")
     subprocess.run(["bom", "generate", "--image-archive", f"../../work/image.tar", "--format", "json", "-o", f"sbom/bom-{target}.spdx.json"], cwd=path)
 
-scanners = [syft, trivy, sbomtool, bom]
+def scout(path: str, name: str, target: str) -> None:
+    subprocess.run(["docker", "scout", "sbom", "--format", "spdx", f"local://sbom/{name}:{target}", "-o", f"sbom/scout-{target}.spdx.json"], cwd=path)
+
+scanners = [syft, trivy, sbomtool, bom, scout]
 
 def main() -> None:
     with open("recipes.json", "r") as f:
