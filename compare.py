@@ -5,7 +5,7 @@ from sys import argv
 
 import common
 
-scanners = ["syft", "trivy"]
+scanners = ["syft", "trivy", "sbomtool"]
 
 def extractVersionsFromSPDX(sbomPath: str) -> list[dict]:
     with open(sbomPath, "r") as f:
@@ -71,7 +71,15 @@ def main() -> None:
             if target not in output[recipe["name"]]:
                 output[recipe["name"]][target] = {}
             for scanner in scanners:
-                discovered = extractVersionsFromSPDX(f"{path}/sbom/{scanner}-{target}.spdx.json")
+                file = f"{path}/sbom/{scanner}-{target}.spdx.json"
+                try:
+                    discovered = extractVersionsFromSPDX(file)
+                except json.JSONDecodeError:
+                    print("Could not parse JSON in file", file)
+                    continue
+                except FileNotFoundError as e:
+                    print("Could not find file", file)
+                    continue
 
                 filteredSources = targets[target]
                 tmpTruth = truth[:]

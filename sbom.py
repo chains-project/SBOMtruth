@@ -5,6 +5,7 @@ Builds SBOMs for the generated images.
 
 import json
 import os
+import shutil
 import subprocess
 from sys import argv
 
@@ -20,7 +21,13 @@ def syft(path: str, name: str, target: str) -> None:
 def trivy(path: str, name: str, target: str) -> None:
     subprocess.run(["trivy", "image", f"sbom/{name}:{target}", "-f", "spdx-json", "-o", f"sbom/trivy-{target}.spdx.json"], cwd=path)
 
-scanners = [syft, trivy]
+def sbomtool(path: str, name: str, target: str) -> None:
+    if not os.path.exists("work"):
+        os.mkdir("work")
+    subprocess.run(["sbom-tool", "generate", "-pn", "sbom-mex", "-ps", "mex", "-pv", "1.0.0", "-di", f"sbom/{name}:{target}", "-m", "."], cwd="work")
+    shutil.copy("work/_manifest/spdx_2.2/manifest.spdx.json", f"{path}/sbom/sbomtool-{target}.spdx.json")
+
+scanners = [syft, trivy, sbomtool]
 
 def main() -> None:
     with open("recipes.json", "r") as f:
