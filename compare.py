@@ -5,7 +5,7 @@ from sys import argv
 
 import common
 
-scanners = ["syft", "trivy", "sbomtool"]
+scanners = ["syft", "trivy", "sbomtool", "bom"]
 
 def extractVersionsFromSPDX(sbomPath: str) -> list[dict]:
     with open(sbomPath, "r") as f:

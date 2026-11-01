@@ -27,7 +27,13 @@ def sbomtool(path: str, name: str, target: str) -> None:
     subprocess.run(["sbom-tool", "generate", "-pn", "sbom-mex", "-ps", "mex", "-pv", "1.0.0", "-di", f"sbom/{name}:{target}", "-m", "."], cwd="work")
     shutil.copy("work/_manifest/spdx_2.2/manifest.spdx.json", f"{path}/sbom/sbomtool-{target}.spdx.json")
 
-scanners = [syft, trivy, sbomtool]
+def bom(path: str, name: str, target: str) -> None:
+    if not os.path.exists("work"):
+        os.mkdir("work")
+    subprocess.run(["docker", "save", f"sbom/{name}:{target}", "-o", "image.tar"], cwd="work")
+    subprocess.run(["bom", "generate", "--image-archive", f"../../work/image.tar", "--format", "json", "-o", f"sbom/bom-{target}.spdx.json"], cwd=path)
+
+scanners = [syft, trivy, sbomtool, bom]
 
 def main() -> None:
     with open("recipes.json", "r") as f:
