@@ -6,6 +6,7 @@ from sys import argv
 import common
 
 scanners = ["syft", "trivy", "sbomtool", "bom", "scout"]
+nameMap = {"syft": "Syft", "trivy": "Trivy", "sbomtool": "sbom-tool", "bom": "bom", "scout": "Docker scout"}
 
 def extractVersionsFromSPDX(sbomPath: str) -> list[dict]:
     with open(sbomPath, "r") as f:
@@ -43,7 +44,75 @@ def computeMatches(truth: list[dict], sbom: list[dict]) -> dict:
 
     return {"tp": truePositives, "fp": falsePositives, "fn": falseNegatives}
 
+def pad(s, l):
+    return s + " " * (l - len(s))
+
+def printLatex(f, result, image, target) -> None:
+    columns = []
+    columns.append(["Measure", "True positives", "False positives", "Precision", "False negatives", "Recall"])
+    for scanner in result:
+        o = result[scanner]
+        col = []
+        col.append(nameMap[scanner])
+        col.append(o["tp"])
+        col.append(o["fp"])
+        if o["precision"] != None:
+            col.append(f"${round(o["precision"] * 100, 1)}\\%$")
+        else:
+            col.append("N/A")
+        col.append(o["fn"])
+        if o["recall"] != None:
+            col.append(f"${round(o["recall"] * 100, 1)}\\%$")
+        else:
+            col.append("N/A")
+
+        columns.append([str(cell) for cell in col])
+
+    for i in range(len(columns)):
+        columns[i][0] = f"\\textbf{{{columns[i][0]}}}"
+
+
+    lengths = [max([len(cell) for cell in col]) for col in columns]
+
+    for col in range(len(columns)):
+        columns[col] = [pad(cell, lengths[col]) for cell in columns[col]]
+
+    rows = [[None for b in range(len(columns))] for i in range(len(columns[0])) ]
+
+    for col in range(len(columns)):
+        for row in range(len(columns[col])):
+            rows[row][col] = columns[col][row]
+
+    rows = ["\t\t\t" + " & ".join(row) + " \\\\ \\hline" for row in rows]
+
+    rqguess = "rq2" if target == "base" else "rq3"
+
+    preamble = f"""\\begin{{table}}[!ht]
+    \\begin{{center}}
+        \\caption{{Results for {image} - {target}}}
+        \\label{{{f"tab:res-{rqguess}-{image}{f"-{target}" if rqguess == "rq3" else ""}"}}}
+        \\begin{{tabular}}{{{f"|{"|".join(["l" for _ in columns])}|"}}}
+            \\hline
+"""
+    postamble = """        \\end{tabular}
+    \\end{center}
+\\end{table}
+"""
+
+    f.write(f"{image} - {target}")
+    f.write("\n")
+    f.write(preamble)
+    for row in rows:
+        f.write(row)
+        f.write("\n")
+    f.write(postamble)
+    f.write("\n\n")
+
 def main() -> None:
+    latex = "--latex" in argv
+    if latex:
+        argv.remove("--latex")
+
     with open("recipes.json", "r") as f:
         full = json.load(f)
         recipes = common.recipes(full)
@@ -90,13 +159,25 @@ def main() -> None:
                 print(f"{scanner:.<16}: tp: {len(comp["tp"]): >5}, fp: {len(comp["fp"]): >5}, fn: {len(comp["fn"]): >5}")
 
                 if scanner not in output[recipe["name"]][target]:
+                    precision = len(comp["tp"]) + len(comp["fp"])
+                    precision = len(comp["tp"]) / precision if precision > 0 else None
+                    recall = len(comp["tp"]) + len(comp["fn"])
+                    recall = len(comp["tp"]) / recall if recall > 0 else None
                     output[recipe["name"]][target][scanner] = {
                         "tp": len(comp["tp"]), "fp": len(comp["fp"]), "fn": len(comp["fn"]),
+                        "precision": precision, "recall": recall,
                         "tp_list": comp["tp"],"fp_list": comp["fp"], "fn_list": comp["fn"]}
             print()
 
     with open("report.json", "w") as f:
         json.dump(output, f, indent='\t')
+
+    if latex:
+        with open("latex.txt", "w") as f:
+            for recipe in output:
+                for target in output[recipe]:
+                    printLatex(f, output[recipe][target], recipe, target)
+
 
 if __name__ == "__main__":
     main()
