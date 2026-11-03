@@ -47,43 +47,27 @@ def computeMatches(truth: list[dict], sbom: list[dict]) -> dict:
 def pad(s, l):
     return s + " " * (l - len(s))
 
-def printLatex(f, result, image, target) -> None:
-    columns = []
-    columns.append(["Measure", "True positives", "False positives", "Precision", "False negatives", "Recall"])
-    for scanner in result:
-        o = result[scanner]
-        col = []
-        col.append(nameMap[scanner])
-        col.append(o["tp"])
-        col.append(o["fp"])
-        if o["precision"] != None:
-            col.append(f"${round(o["precision"] * 100, 1)}\\%$")
-        else:
-            col.append("N/A")
-        col.append(o["fn"])
-        if o["recall"] != None:
-            col.append(f"${round(o["recall"] * 100, 1)}\\%$")
-        else:
-            col.append("N/A")
+def latexTable(f, rows, image, target) -> None:
+    sectionEnds = []
+    for row in range(len(rows)):
+        if rows[row][0] not in ["Base", ""]:
+            sectionEnds.append(row-1)
 
-        columns.append([str(cell) for cell in col])
+        for col in range(len(rows[row])):
+            if type(rows[row][col]) == float:
+                rows[row][col] = f"${round(rows[row][col] * 100, 1)}\\%$"
 
-    for i in range(len(columns)):
-        columns[i][0] = f"\\textbf{{{columns[i][0]}}}"
+            # make first row bold
+            if (row == 0) and rows[row][col] != "":
+                rows[row][col] = f"\\textbf{{{rows[row][col]}}}"
 
+    cols = len(rows[0])
 
-    lengths = [max([len(cell) for cell in col]) for col in columns]
+    compacted = []
+    for row in range(len(rows)):
+        ending = f"\\cline{{2-{len(rows[row])}}}" if row not in sectionEnds and row != len(rows)-1 else "\\hline"
+        compacted.append("\t\t\t" + " & ".join(rows[row]) + " \\\\ " + ending)
 
-    for col in range(len(columns)):
-        columns[col] = [pad(cell, lengths[col]) for cell in columns[col]]
-
-    rows = [[None for b in range(len(columns))] for i in range(len(columns[0])) ]
-
-    for col in range(len(columns)):
-        for row in range(len(columns[col])):
-            rows[row][col] = columns[col][row]
-
-    rows = ["\t\t\t" + " & ".join(row) + " \\\\ \\hline" for row in rows]
 
     rqguess = "rq2" if target == "base" else "rq3"
 
@@ -91,7 +75,7 @@ def printLatex(f, result, image, target) -> None:
     \\begin{{center}}
         \\caption{{Results for {image} - {target}}}
         \\label{{{f"tab:res-{rqguess}-{image}{f"-{target}" if rqguess == "rq3" else ""}"}}}
-        \\begin{{tabular}}{{{f"|{"|".join(["l" for _ in columns])}|"}}}
+        \\begin{{tabular}}{{{f"|{"|".join(["l" for _ in range(cols)])}|"}}}
             \\hline
 """
     postamble = """        \\end{tabular}
@@ -102,16 +86,101 @@ def printLatex(f, result, image, target) -> None:
     f.write(f"{image} - {target}")
     f.write("\n")
     f.write(preamble)
-    for row in rows:
+    for row in compacted:
         f.write(row)
         f.write("\n")
     f.write(postamble)
     f.write("\n\n")
 
+def collectRecalls(instance: dict) -> dict:
+    tps = {}
+    fns = {}
+    sources = set()
+
+    for tp in instance["tp_list"]:
+        if tp["source"] not in sources:
+            sources.add(tp["source"])
+        if tp["source"] not in tps:
+            tps[tp["source"]] = 0
+        tps[tp["source"]] += 1
+
+    for fn in instance["fn_list"]:
+        if fn["source"] not in sources:
+            sources.add(fn["source"])
+        if fn["source"] not in fns:
+            fns[fn["source"]] = 0
+        fns[fn["source"]] += 1
+
+    out = {}
+    for source in sources:
+        tp = tps[source] if source in tps else 0
+        fn = fns[source] if source in fns else 0
+        out[f"recall-{source}"] = tp / (tp + fn) if tp + fn > 0 else 0
+
+    return out
+
+def printLatex(results: dict) -> None:
+    # output[lang][target][distro][scanner]
+    output = {}
+
+    for recipe in results:
+        recipeParts = recipe.split("-")
+        lang = "-".join(recipeParts[:-1]) if len(recipeParts) > 1 else recipe
+        distro = recipeParts[-1] if len(recipeParts) > 1 else "default"
+
+        if lang not in output:
+            output[lang] = {}
+
+        for target in results[recipe]:
+            if target not in output[lang]:
+                output[lang][target] = {}
+            if distro not in output[lang][target]:
+                output[lang][target][distro] = {}
+
+            for scanner in results[recipe][target]:
+                recalls = {}
+                recalls["precision"] = results[recipe][target][scanner]["precision"]
+                recalls["recall"] = results[recipe][target][scanner]["recall"]
+                r2 = collectRecalls(results[recipe][target][scanner])
+                if len(r2) > 1:
+                    recalls.update(r2)
+
+                output[lang][target][distro][scanner] = recalls
+
+    with open("latex.txt", "w") as f:
+        for lang in output:
+            for target in output[lang]:
+                rows = []
+                # extract sbom scanners for this image-lang-target
+                scans = list(list(output[lang][target].values())[0].keys())
+                rows.append(["Base", "Measure"] + scans) # first row
+
+                for distro in output[lang][target]:
+                    inv = {}
+                    scanners = output[lang][target][distro]
+
+                    # invert from scanner -> measure to measure -> scanner
+                    for scanner in scanners:
+                        for measure in scanners[scanner]:
+                            if measure not in inv:
+                                inv[measure] = {}
+                            inv[measure][scanner] = scanners[scanner][measure]
+
+                    insideRows = [["", measure] + [inv[measure][scanner] if scanner in inv[measure] else "N/A" for scanner in scans] for measure in inv]
+                    insideRows[0][0] = f"\\multirow{{{len(insideRows)}}}{{4em}}{{{distro}}}"
+
+                    rows.extend(insideRows)
+                latexTable(f, rows, lang, target)
+    exit()
+
 def main() -> None:
     latex = "--latex" in argv
     if latex:
         argv.remove("--latex")
+
+    spam = "--print" in argv
+    if spam:
+        argv.remove("--print")
 
     with open("recipes.json", "r") as f:
         full = json.load(f)
@@ -128,12 +197,14 @@ def main() -> None:
             truth = json.load(f)
 
         targets = common.targets(recipe, confounders)
-        print(f"{recipe["name"]}: ", end="")
+        if spam:
+            print(f"{recipe["name"]}: ", end="")
         for target in targets:
             if len(argv) > 1:
                 if target not in argv[1:]:
                     continue
-            print(target)
+            if spam:
+                print(target)
 
             if recipe["name"] not in output:
                 output[recipe["name"]] = {}
@@ -156,27 +227,26 @@ def main() -> None:
                     tmpTruth = [comp for comp in truth if comp["source"] in filteredSources]
 
                 comp = computeMatches(tmpTruth, discovered)
-                print(f"{scanner:.<16}: tp: {len(comp["tp"]): >5}, fp: {len(comp["fp"]): >5}, fn: {len(comp["fn"]): >5}")
+                if spam:
+                    print(f"{scanner:.<16}: tp: {len(comp["tp"]): >5}, fp: {len(comp["fp"]): >5}, fn: {len(comp["fn"]): >5}")
 
                 if scanner not in output[recipe["name"]][target]:
                     precision = len(comp["tp"]) + len(comp["fp"])
-                    precision = len(comp["tp"]) / precision if precision > 0 else None
+                    precision = len(comp["tp"]) / precision if precision > 0 else "N/A"
                     recall = len(comp["tp"]) + len(comp["fn"])
-                    recall = len(comp["tp"]) / recall if recall > 0 else None
+                    recall = len(comp["tp"]) / recall if recall > 0 else "N/A"
                     output[recipe["name"]][target][scanner] = {
                         "tp": len(comp["tp"]), "fp": len(comp["fp"]), "fn": len(comp["fn"]),
                         "precision": precision, "recall": recall,
                         "tp_list": comp["tp"],"fp_list": comp["fp"], "fn_list": comp["fn"]}
-            print()
+            if spam:
+                print()
 
     with open("report.json", "w") as f:
         json.dump(output, f, indent='\t')
 
     if latex:
-        with open("latex.txt", "w") as f:
-            for recipe in output:
-                for target in output[recipe]:
-                    printLatex(f, output[recipe][target], recipe, target)
+        printLatex(output)
 
 
 if __name__ == "__main__":
